@@ -7,45 +7,36 @@ from dash import dcc, html, Input, Output, State
 
 def load_and_preprocess(file_path):
     try:
-        # Определим названия колонок на основе примера файла
         columns = [
             "title", "rating", "genre", "year", "release_date", "score", "votes",
             "director", "writer", "actor", "country", "budget", "gross", "studio", "runtime"
         ]
 
-        # Чтение данных с обработкой ошибок
         df = pd.read_csv(file_path, on_bad_lines='skip', names=columns, header=None, engine='python')
 
-        # Удаление дубликатов
         df = df.drop_duplicates(subset=['title', 'year'])
 
-        # Приведение типов
         df['year'] = pd.to_numeric(df['year'], errors='coerce').fillna(0).astype(int)
         df['score'] = pd.to_numeric(df['score'], errors='coerce')
         df['gross'] = pd.to_numeric(df['gross'], errors='coerce')
         df['budget'] = pd.to_numeric(df['budget'], errors='coerce')
         df['votes'] = pd.to_numeric(df['votes'], errors='coerce')
 
-        # Обработка даты релиза
         df['release_date'] = pd.to_datetime(
             df['release_date'].str.extract(r'(\w+ \d{1,2}, \d{4})')[0],
             errors='coerce'
         )
 
-        # Расчет ROI (Return on Investment)
         df['roi'] = (df['gross'] - df['budget']) / df['budget']
 
-        # Категоризация тональности
         df['sentiment'] = df['score'].apply(
             lambda x: 'Positive' if x >= 6.5 else ('Neutral' if 5 <= x < 6.5 else 'Negative')
         )
 
-        # Разделение жанров (если их несколько через запятую)
         df['genres'] = df['genre'].str.split(',')
         df = df.explode('genres')
         df['genres'] = df['genres'].str.strip()
 
-        # Удаление пропусков в ключевых столбцах
         df = df.dropna(subset=['score', 'genres', 'year'])
 
         return df
@@ -55,7 +46,6 @@ def load_and_preprocess(file_path):
         return pd.DataFrame()
 
 
-# --- 2. Улучшенные визуализации ---
 def plot_rating_distribution(df):
     fig = px.histogram(
         df, x='score', nbins=20,
@@ -75,7 +65,7 @@ def plot_rating_distribution(df):
 
 def plot_avg_rating_by_genre(df, top_n=15):
     genre_ratings = df.groupby('genres')['score'].agg(['mean', 'count'])
-    genre_ratings = genre_ratings[genre_ratings['count'] >= 10]  # Фильтр по количеству фильмов
+    genre_ratings = genre_ratings[genre_ratings['count'] >= 10]  
     genre_ratings = genre_ratings.sort_values('mean', ascending=False).head(top_n).reset_index()
 
     fig = px.bar(
@@ -114,11 +104,10 @@ def plot_rating_trend_over_years(df):
         'score': 'mean',
         'title': 'count'
     }).reset_index()
-    yearly_stats = yearly_stats[yearly_stats['title'] >= 5]  # Фильтр по количеству фильмов
+    yearly_stats = yearly_stats[yearly_stats['title'] >= 5] 
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-    # Средний рейтинг
     fig.add_trace(
         go.Scatter(
             x=yearly_stats['year'], y=yearly_stats['score'],
@@ -128,7 +117,6 @@ def plot_rating_trend_over_years(df):
         secondary_y=False,
     )
 
-    # Количество фильмов
     fig.add_trace(
         go.Bar(
             x=yearly_stats['year'], y=yearly_stats['title'],
@@ -188,14 +176,11 @@ def plot_top_directors(df, top_n=10):
     return fig
 
 
-# --- 3. Улучшенная интерактивная панель с Dash ---
 app = dash.Dash(__name__, suppress_callback_exceptions=True)
 server = app.server
 
-# Загрузка данных
 df_full = load_and_preprocess("movies.csv")
 
-# Получаем уникальные жанры для фильтров
 available_genres = sorted(df_full['genres'].unique())
 min_year = int(df_full['year'].min())
 max_year = int(df_full['year'].max())
@@ -275,7 +260,6 @@ app.layout = html.Div([
      Input('votes-input', 'value')]
 )
 def update_tab_content(tab, years, genres, min_rating, min_votes):
-    # Фильтрация данных
     filtered_df = df_full[
         (df_full['year'] >= years[0]) &
         (df_full['year'] <= years[1]) &
@@ -304,7 +288,6 @@ def update_tab_content(tab, years, genres, min_rating, min_votes):
                 dcc.Graph(figure=plot_budget_vs_gross(filtered_df))
             ], className='row'),
             html.Div([
-                # Можно добавить дополнительные финансовые графики
             ], className='row')
         ])
 
@@ -316,6 +299,5 @@ def update_tab_content(tab, years, genres, min_rating, min_votes):
         ])
 
 
-# --- 4. Запуск приложения ---
 if __name__ == '__main__':
     app.run(debug=True, port=8050)
